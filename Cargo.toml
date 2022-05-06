@@ -1,0 +1,11 @@
+[package]
+name = "i3-wsnames-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+i3ipc = "0.10.1"
+clap = "3.1.15"
+config = "0.13.1"
