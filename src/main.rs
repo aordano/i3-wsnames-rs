@@ -128,7 +128,7 @@ fn run(matches: clap::ArgMatches) -> Result<(), model::I3WSNamesError> {
 }
 
 fn main() {
-    let matches = clap::Command::new("sitebuilder")
+    let matches = clap::Command::new("i3-wsnames")
         .version("0.1.0")
         .author("Ágata Ordano")
         .about("Renames workspaces arbitrarily, showing what they contain without losing addressability.AsMut")
