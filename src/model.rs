@@ -59,7 +59,7 @@ pub struct Window {
     pub x11_id: i32,
     pub name: String,
     pub display_name: String,
-    pub class: String,
+    pub class: Vec<String>,
     pub urgent: bool,
     pub focused: bool,
 }

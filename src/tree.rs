@@ -40,12 +40,13 @@ pub fn parse_windows(windows_digest: Vec<model::WindowDigest>) -> Vec<model::Win
         .unwrap();
 
         // Matches the first class name (usually further names are minor variations of the first)
-        let class = WM_CLASS_REGEX
-            .captures(&xprop)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str();
+        let class_matches = WM_CLASS_REGEX.captures_iter(&xprop);
+
+        let mut classes = Vec::new();
+
+        for capture in class_matches {
+            classes.push(capture.get(1).unwrap().as_str().to_string());
+        }
 
         windows.push(model::Window {
             in_workspace: digest.workspace_id,
@@ -56,8 +57,8 @@ pub fn parse_windows(windows_digest: Vec<model::WindowDigest>) -> Vec<model::Win
             display_name: "gotta load this from the config, doug".to_string(),
             urgent: digest.window_data.urgent,
             focused: digest.window_data.focused,
-            class: String::from(class),
-        })
+            class: classes,
+        });
     }
 
     windows
