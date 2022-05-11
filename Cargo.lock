@@ -218,6 +218,7 @@ dependencies = [
  "i3ipc",
  "lazy_static",
  "regex",
+ "serde",
 ]
 
 [[package]]
