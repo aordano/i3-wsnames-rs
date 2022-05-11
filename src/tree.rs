@@ -192,7 +192,7 @@ pub fn parse(data: &mut model::I3Data) -> Result<Vec<model::Tree>, model::I3WSNa
                                             }
                                         }
                                         None => {
-                                            println!("[I3WSNAMES] No output name found");
+                                            println!("[I3WSNAMES] No output found");
                                         }
                                     }
                                 }
