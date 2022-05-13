@@ -1,11 +1,12 @@
 use i3ipc::I3Connection as i3;
 use i3ipc::I3EventListener as i3event;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct I3Data {
     pub connection: i3,
-    pub config: Option<Config>,
+    pub config: Config,
 }
 
 #[derive(Debug)]
@@ -22,8 +23,8 @@ pub struct ConfigData {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    rename: ConfigRename,
-    cross_boundary: bool,
+    pub rename: ConfigRename,
+    pub cross_boundary: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,14 +35,15 @@ pub struct ConfigRename {
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigWindow {
-    class: String,
-    name: String
+    pub class: String,
+    pub name: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigWorkspace {
-    number: i16,
-    name: String
+    pub number: u8,
+    pub name: String,
+    pub layout: Option<String>,
 }
 
 /**
@@ -59,32 +61,32 @@ pub struct UpdateError {}
 #[derive(Debug)]
 pub enum I3WSNamesError {
     Loop(LoopError),
-    Setup(SetupError),
+    Request(RequestError),
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum LoopError {
     ApplyError,
     UpdateError,
+    ParseError,
 }
 
 #[derive(Debug)]
-pub enum SetupError {
+pub enum RequestError {
     I3Connection(i3ipc::EstablishError),
     I3Message(i3ipc::MessageError),
     Config(config::ConfigError),
+    I3Command(String),
 }
 #[derive(Debug, Clone)]
 pub struct Tree {
-    pub workspaces: Vec<Workspace>,
-    pub windows: Vec<Window>,
+    pub workspaces: WorkspaceTree,
+    pub windows: WindowTree,
     pub output: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct Workspace {
-    pub name: String,
-    pub display_name: String,
     pub id: i64,
     pub layout: i3ipc::reply::NodeLayout,
     pub urgent: bool,
@@ -94,7 +96,6 @@ pub struct Workspace {
 #[derive(Debug, Clone)]
 pub struct Window {
     pub in_workspace: i64,
-    pub i3_id: i64,
     pub x11_id: i32,
     pub name: String,
     pub display_name: String,
@@ -109,6 +110,12 @@ pub struct WindowDigest {
 }
 
 pub struct WorkspaceDigest {
-    pub workspaces: Vec<Workspace>,
+    pub workspaces: WorkspaceTree,
     pub windows: Vec<WindowDigest>,
 }
+
+// the i64 represents the i3 id given to the entry
+pub type WindowTree = BTreeMap<i64, Window>;
+
+// the String represents the workspace name
+pub type WorkspaceTree = BTreeMap<String, Workspace>;

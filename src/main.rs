@@ -34,42 +34,35 @@ fn run(matches: clap::ArgMatches) -> Result<(), model::I3WSNamesError> {
         Err(error) => {
             // TODO Fancy error handling here
             match error {
-                model::SetupError::I3Connection(error) => {
+                model::RequestError::I3Connection(error) => {
                     println!("\n DEBUG: {}", error);
-                    return Err(model::I3WSNamesError::Setup(
-                        model::SetupError::I3Connection(error),
+                    return Err(model::I3WSNamesError::Request(
+                        model::RequestError::I3Connection(error),
                     ));
                 }
-                model::SetupError::I3Message(error) => {
+                model::RequestError::I3Message(error) => {
                     println!("\n DEBUG: {}", error);
-                    return Err(model::I3WSNamesError::Setup(model::SetupError::I3Message(
+                    return Err(model::I3WSNamesError::Request(
+                        model::RequestError::I3Message(error),
+                    ));
+                }
+                model::RequestError::Config(error) => {
+                    println!("\n DEBUG: {}", error);
+                    return Err(model::I3WSNamesError::Request(model::RequestError::Config(
                         error,
                     )));
                 }
-                model::SetupError::Config(error) => {
+                model::RequestError::I3Command(error) => {
                     println!("\n DEBUG: {}", error);
-                    return Err(model::I3WSNamesError::Setup(model::SetupError::Config(
-                        error,
-                    )));
+                    return Err(model::I3WSNamesError::Request(
+                        model::RequestError::I3Command(error),
+                    ));
                 }
             }
         }
         Ok(setup_data) => {
             match main_loop(setup_data.data, setup_data.events) {
-                Err(error) => {
-                    match error {
-                        model::LoopError::ApplyError => {
-                            // TODO implement fmt::Display for ApplyError
-                            //println!("Something went wrong while applying the changes: {}", error);
-                            return Err(model::I3WSNamesError::Loop(model::LoopError::ApplyError));
-                        }
-                        model::LoopError::UpdateError => {
-                            // TODO implement fmt::Display for UpdateError
-                            //println!("Something went wrong while updating the workpace graph: {}", error);
-                            return Err(model::I3WSNamesError::Loop(model::LoopError::UpdateError));
-                        }
-                    }
-                }
+                Err(error) => return Err(error),
                 // HACK i mean it should never reach this code unless somthing trips the while breaker
                 Ok(_) => {
                     return Ok(());
@@ -78,26 +71,34 @@ fn run(matches: clap::ArgMatches) -> Result<(), model::I3WSNamesError> {
         }
     }
 }
-fn setup(config_path: Option<&str>) -> Result<model::SetupData, model::SetupError> {
+fn setup(config_path: Option<&str>) -> Result<model::SetupData, model::RequestError> {
     let connection;
     let events;
-    let config_data: Option<model::Config>;
+    let config_data: model::Config;
+
+    let default_config = model::Config {
+        rename: model::ConfigRename {
+            workspaces: Vec::<model::ConfigWorkspace>::new(),
+            windows: Vec::<model::ConfigWindow>::new(),
+        },
+        cross_boundary: false,
+    };
 
     match config_path {
         Some(path) => {
             let config_result = functions::read_config(path);
             match config_result {
                 Ok(config) => {
-                    config_data = Some(config);
+                    config_data = config;
                 }
                 Err(error) => {
                     println!("\n DEBUG: {:?}", error);
-                    return Err(model::SetupError::Config(error));
+                    return Err(model::RequestError::Config(error));
                 }
             }
         }
         None => {
-            config_data = None;
+            config_data = default_config;
         }
     }
 
@@ -105,7 +106,7 @@ fn setup(config_path: Option<&str>) -> Result<model::SetupData, model::SetupErro
         Err(error) => {
             // TODO Fancy error handling here
             println!("\n DEBUG: {}", error);
-            return Err(model::SetupError::I3Connection(error));
+            return Err(model::RequestError::I3Connection(error));
         }
         Ok(conn) => connection = conn,
     }
@@ -114,7 +115,7 @@ fn setup(config_path: Option<&str>) -> Result<model::SetupData, model::SetupErro
         Err(error) => {
             // TODO Fancy error handling here
             println!("\n DEBUG: {}", error);
-            return Err(model::SetupError::I3Connection(error));
+            return Err(model::RequestError::I3Connection(error));
         }
         Ok(evs) => events = evs,
     }
@@ -127,37 +128,32 @@ fn setup(config_path: Option<&str>) -> Result<model::SetupData, model::SetupErro
     })
 }
 
-fn main_loop(mut data: model::I3Data, mut events: i3event) -> Result<(), model::LoopError> {
+fn main_loop(mut data: model::I3Data, mut events: i3event) -> Result<(), model::I3WSNamesError> {
     let workspace = &events.subscribe(&[event_list::Workspace]);
     let window = &events.subscribe(&[event_list::Window]);
-    let mut tree = tree::parse(&mut data);
-    println!("\n[Parse Tree]\n DEBUG: {:?}", tree);
     let mut event_stream = events.listen();
+
+    let mut tree: Vec<model::Tree>;
+
+    match tree::parse(&mut data) {
+        Ok(ok_tree) => {
+            tree = ok_tree;
+            println!("\n[Parse Tree]\n DEBUG: {:?}", &tree);
+        }
+        Err(error) => {
+            println!("\n DEBUG: {:?}", error);
+            return Err(error);
+        }
+    }
 
     for event in event_stream {
         match event {
             Ok(this_event) => match this_event {
                 i3ipc::event::Event::WorkspaceEvent(workspace_event) => {
-                    let mut temp_tree: Vec<model::Tree> = Vec::new();
-                    for output_tree in tree.as_ref().unwrap() {
-                        temp_tree.push(
-                            functions::do_workspace(
-                                &workspace_event,
-                                &mut data,
-                                output_tree.clone(),
-                            )
-                            .unwrap(),
-                        );
-                    }
+                    tree = functions::do_workspace(&workspace_event, &mut data, tree).unwrap();
                 }
                 i3ipc::event::Event::WindowEvent(window_event) => {
-                    let mut temp_tree: Vec<model::Tree> = Vec::new();
-                    for output_tree in tree.as_ref().unwrap() {
-                        temp_tree.push(
-                            functions::do_window(&window_event, &mut data, output_tree.clone())
-                                .unwrap(),
-                        );
-                    }
+                    tree = functions::do_window(&window_event, &mut data, tree).unwrap();
                 }
                 _ => {}
             },

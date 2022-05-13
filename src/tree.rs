@@ -1,6 +1,7 @@
 use i3ipc;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::collections::BTreeMap;
 use std::process;
 
 use super::model;
@@ -18,8 +19,8 @@ use super::model;
 /// TODO Manage display names; load config data and check what they should be and stuff
 ///
 ///
-pub fn parse_windows(windows_digest: Vec<model::WindowDigest>) -> Vec<model::Window> {
-    let mut windows: Vec<model::Window> = Vec::new();
+pub fn parse_windows(windows_digest: Vec<model::WindowDigest>) -> model::WindowTree {
+    let mut windows: model::WindowTree = BTreeMap::new();
 
     // Defines constant regex to only select the actual class name
     lazy_static! {
@@ -48,24 +49,26 @@ pub fn parse_windows(windows_digest: Vec<model::WindowDigest>) -> Vec<model::Win
             classes.push(capture.get(1).unwrap().as_str().to_string());
         }
 
-        windows.push(model::Window {
-            in_workspace: digest.workspace_id,
-            i3_id: digest.window_data.id,
-            x11_id: digest.window_data.window.unwrap(),
-            name: digest.window_data.name.unwrap(),
-            // HACK Load the display name from the config
-            display_name: "gotta load this from the config, doug".to_string(),
-            urgent: digest.window_data.urgent,
-            focused: digest.window_data.focused,
-            class: classes,
-        });
+        windows.insert(
+            digest.window_data.id,
+            model::Window {
+                in_workspace: digest.workspace_id,
+                x11_id: digest.window_data.window.unwrap(),
+                name: digest.window_data.name.unwrap(),
+                // HACK Load the display name from the config
+                display_name: "gotta load this from the config, doug".to_string(),
+                urgent: digest.window_data.urgent,
+                focused: digest.window_data.focused,
+                class: classes,
+            },
+        );
     }
 
     windows
 }
 
 pub fn parse_workspaces(workspace_nodes: Vec<i3ipc::reply::Node>) -> model::WorkspaceDigest {
-    let mut graph_workspaces = Vec::new();
+    let mut tree_workspaces = BTreeMap::new();
     let mut window_digest: Vec<model::WindowDigest> = Vec::new();
 
     for workspace in workspace_nodes {
@@ -74,6 +77,7 @@ pub fn parse_workspaces(workspace_nodes: Vec<i3ipc::reply::Node>) -> model::Work
                 nodes: containers,
                 name: workspace_name,
                 id: workspace_id,
+
                 layout: workspace_layout,
                 urgent: workspace_is_urgent,
                 focused: workspace_is_focused,
@@ -81,15 +85,15 @@ pub fn parse_workspaces(workspace_nodes: Vec<i3ipc::reply::Node>) -> model::Work
             } => {
                 match workspace_name {
                     Some(name) => {
-                        graph_workspaces.push(model::Workspace {
-                            name: name,
-                            // HACK Load the display name from the config
-                            display_name: "gotta load this from the config, doug".to_string(),
-                            id: workspace_id,
-                            layout: workspace_layout,
-                            urgent: workspace_is_urgent,
-                            focused: workspace_is_focused,
-                        });
+                        tree_workspaces.insert(
+                            name,
+                            model::Workspace {
+                                id: workspace_id,
+                                layout: workspace_layout,
+                                urgent: workspace_is_urgent,
+                                focused: workspace_is_focused,
+                            },
+                        );
                     }
                     None => {
                         println!("[I3WSNAMES] No workspace name found");
@@ -119,7 +123,7 @@ pub fn parse_workspaces(workspace_nodes: Vec<i3ipc::reply::Node>) -> model::Work
     }
 
     model::WorkspaceDigest {
-        workspaces: graph_workspaces,
+        workspaces: tree_workspaces,
         windows: window_digest,
     }
 }
@@ -139,15 +143,15 @@ pub fn parse_workspaces(workspace_nodes: Vec<i3ipc::reply::Node>) -> model::Work
  * RETURNS: graph containing the state of the i3 workspace tree
  */
 pub fn parse(data: &mut model::I3Data) -> Result<Vec<model::Tree>, model::I3WSNamesError> {
-    let tree = data.connection.get_tree();
-    let mut graphs: Vec<model::Tree> = Vec::new();
+    let tree_per_output = data.connection.get_tree();
+    let mut trees: Vec<model::Tree> = Vec::new();
 
-    match tree {
+    match tree_per_output {
         Err(error) => {
             println!("{:?}", error);
-            return Err(model::I3WSNamesError::Setup(model::SetupError::I3Message(
-                error,
-            )));
+            return Err(model::I3WSNamesError::Request(
+                model::RequestError::I3Message(error),
+            ));
         }
         Ok(tree) => {
             match tree {
@@ -177,7 +181,7 @@ pub fn parse(data: &mut model::I3Data) -> Result<Vec<model::Tree>, model::I3WSNa
                                                                 let workspace_digest =
                                                                     parse_workspaces(workspaces);
 
-                                                                graphs.push(model::Tree {
+                                                                trees.push(model::Tree {
                                                                     workspaces: workspace_digest
                                                                         .workspaces,
                                                                     windows: parse_windows(
@@ -201,7 +205,7 @@ pub fn parse(data: &mut model::I3Data) -> Result<Vec<model::Tree>, model::I3WSNa
                     }
                 }
             }
-            Ok(graphs)
+            Ok(trees)
         }
     }
 }
