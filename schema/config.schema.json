@@ -1,0 +1,72 @@
+{
+    "$schema": "https://json-schema.org/draft/2019-09 /schema",
+    "$id": "https://raw.githubusercontent.com/aordano/i3-wsnames-rs/master/schema/config.schema.json",
+    "title": "i3 Workspace Names Config",
+    "description": "The configuration file for i3-wsnames-rs",
+    "type": "object",
+    "properties": {
+        "rename": {
+            "description": "Lists of elements to rename, both windows and workspaces.",
+            "type": "object",
+            "properties": {
+                "window": {
+                    "description": "List of windows to rename.",
+                    "type": "array",
+                    "items": {
+                        "description": "Window data. Requires specifying the window class and the target name.",
+                        "type": "object",
+                        "properties": {
+                            "class": {
+                                "description": "The X.Org WM_CLASS class name to match against.",
+                                "type": "string"
+                            },
+                            "name": {
+                                "description": "The target name. Can be any arbitrary UTF string.",
+                                "type": "string"
+                            }
+                        },
+                        "required": ["class", "name"]
+                    },
+                    "uniqueItems": true
+                },
+                "workspaces": {
+                    "description": "List of workspaces to rename.",
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "number": {
+                                "description": "The workspace number registered in i3 to match against.",
+                                "type": "number"
+                            },
+                            "name": {
+                                "description": "The target name. Can be any arbitrary UTF string.",
+                                "type": "string"
+                            },
+                            "layout": {
+                                "description": "The target layout. Can be any arbitrary UTF string.",
+                                "type": "string",
+                                "enum": [
+                                    "default",
+                                    "tabbed",
+                                    "stacked",
+                                    "splitv",
+                                    "splith"
+                                ]
+                            }
+                        },
+                        "required": ["number", "name"]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                }
+            },
+            "required": ["workspaces"]
+        },
+        "cross_boundary": {
+            "description": "Flag defining if the relocating and renaming behavior should be kept per-output or if it's ok to move stuff across them.",
+            "type": "boolean"
+        }
+    },
+    "required": ["rename", "cross_boundary"]
+}
